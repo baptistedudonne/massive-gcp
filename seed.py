@@ -36,55 +36,81 @@ def parse_args():
 
 def ensure_users(client: datastore.Client, names: list[str], dry: bool):
     created = 0
-    for name in names:
-        key = client.key('User', name)
-        entity = client.get(key)
-        if entity is None:
+    keys = [client.key('User', name) for name in names]
+    
+    existing_entities = []
+    # get_multi accepte max 1000 clés par requête
+    for i in range(0, len(keys), 1000):
+        existing_entities.extend(client.get_multi(keys[i:i+1000]))
+        
+    existing_keys = {e.key for e in existing_entities}
+    
+    to_put = []
+    for key in keys:
+        if key not in existing_keys:
             entity = datastore.Entity(key)
             entity['follows'] = []
-            if not dry:
-                client.put(entity)
+            to_put.append(entity)
             created += 1
+            
+    if not dry and to_put:
+        # put_multi accepte max 500 entités par requête
+        for i in range(0, len(to_put), 500):
+            client.put_multi(to_put[i:i+500])
+            
     return created
 
 
 def assign_follows(client: datastore.Client, names: list[str], fmin: int, fmax: int, dry: bool):
-    for name in names:
-        key = client.key('User', name)
-        entity = client.get(key)
-        if entity is None:
-            continue  # devrait exister
-        # Générer un set de follows (exclure soi-même)
+    keys = [client.key('User', name) for name in names]
+    entities = []
+    for i in range(0, len(keys), 1000):
+        entities.extend(client.get_multi(keys[i:i+1000]))
+        
+    to_put = []
+    for entity in entities:
+        name = entity.key.name
         others = [u for u in names if u != name]
         if not others:
             continue
         target_count = random.randint(min(fmin, len(others)), min(fmax, len(others)))
         selection = random.sample(others, target_count)
-        # Fusion avec existants
+        
         existing = set(entity.get('follows', []))
         new_set = sorted(existing.union(selection))
         entity['follows'] = new_set
-        if not dry:
-            client.put(entity)
+        to_put.append(entity)
+        
+    if not dry and to_put:
+        for i in range(0, len(to_put), 500):
+            client.put_multi(to_put[i:i+500])
 
 
 def create_posts(client: datastore.Client, names: list[str], total_posts: int, dry: bool):
     if not names or total_posts <= 0:
         return 0
     created = 0
-    # Répartition simple: choix aléatoire d'auteur pour chaque post
     base_time = datetime.utcnow()
+    to_put = []
+    
     for i in range(total_posts):
         author = random.choice(names)
         key = client.key('Post')
         post = datastore.Entity(key)
-        # Décaler artificiellement le timestamp pour obtenir un tri naturel
         post['author'] = author
         post['content'] = f"Seed post {i+1} by {author}"
         post['created'] = base_time - timedelta(seconds=i)
-        if not dry:
-            client.put(post)
+        to_put.append(post)
         created += 1
+        
+        if len(to_put) >= 500:
+            if not dry:
+                client.put_multi(to_put)
+            to_put = []
+            
+    if to_put and not dry:
+        client.put_multi(to_put)
+        
     return created
 
 

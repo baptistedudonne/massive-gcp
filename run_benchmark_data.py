@@ -4,12 +4,20 @@ import csv
 import os
 import sys
 
-# La Base URL de votre application sur Google Cloud doit être passée en environnement
-BASE_URL = "https://tp1-cloud-494919.ue.r.appspot.com"
+# La Base URL de votre application est récupérée dynamiquement
+def get_base_url():
+    try:
+        result = subprocess.run(
+            ["gcloud", "app", "describe", "--format=value(defaultHostname)"],
+            capture_output=True, text=True, check=True
+        )
+        return "https://" + result.stdout.strip()
+    except Exception as e:
+        print("⚠️ Impossible de récupérer l'URL de l'application via gcloud. Utilisez l'URL par défaut.")
+        return "https://tp1-cloud2.ue.r.appspot.com"
 
-
-# Enlève l'éventuel slash à la fin
-BASE_URL = BASE_URL.rstrip('/')
+BASE_URL = get_base_url().rstrip('/')
+print(f"🌍 Utilisation de la Base URL: {BASE_URL}")
 
 def get_active_instances():
     """
