@@ -15,7 +15,7 @@ This README describes how to run, seed and test the app, plus notes about GQL qu
 
 ```sh
 gcloud init
-gcloud app create
+gcloud app repair
 ```
 
 - clone the prof github repository : 
